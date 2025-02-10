@@ -8,8 +8,8 @@ import com.bumptech.glide.Glide
 import com.ctw.mediaselector.databinding.ItemMediaBinding
 
 class MediaAdapter(
-    private var items: List<String>,
-    private val onItemSelected: (String, Boolean) -> Unit
+    private var mediaList: List<MediaFile>,
+    private val onItemSelected: (MediaFile, Boolean) -> Unit
 ) : RecyclerView.Adapter<MediaAdapter.ViewHolder>() {
 
     inner class ViewHolder(val binding: ItemMediaBinding) : RecyclerView.ViewHolder(binding.root)
@@ -24,18 +24,20 @@ class MediaAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val uri = Uri.parse(items[position])
+        val mediaFile = mediaList[position]
         holder.binding.apply {
             Glide.with(root.context)
-                .load(uri)
+                .load(Uri.parse("file://${mediaFile.path}"))
+                .placeholder(R.drawable.ic_loading_placeholder)
+                .error(R.drawable.ic_error_thumbnail)
                 .override(250, 250)
                 .centerCrop()
                 .into(ivThumbnail)
 
             checkBox.setOnCheckedChangeListener(null)
-            checkBox.isChecked = false
+            checkBox.isChecked = mediaFile.isSelected
             checkBox.setOnCheckedChangeListener { _, isChecked ->
-                onItemSelected(items[position], isChecked)
+                onItemSelected(mediaFile, isChecked)
             }
 
             root.setOnClickListener {
@@ -44,10 +46,12 @@ class MediaAdapter(
         }
     }
 
-    override fun getItemCount() = items.size
+    override fun getItemCount() = mediaList.size
 
-    fun updateData(newItems: List<String>) {
-        items = newItems
+    fun getSelectedItems() = mediaList.filter { it.isSelected }
+
+    fun updateData(newList: List<MediaFile>) {
+        mediaList = newList
         notifyDataSetChanged()
     }
 } 

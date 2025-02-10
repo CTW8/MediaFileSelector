@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import android.net.Uri
 import android.content.ContentUris
 import kotlinx.coroutines.withContext
+import com.ctw.mediaselector.MediaLoader
 
 
 class MediaSelectorActivity : AppCompatActivity() {
@@ -64,20 +65,22 @@ class MediaSelectorActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        mediaAdapter = MediaAdapter(emptyList()) { path, isSelected ->
-            if (isSelected) selectedItems.add(path) else selectedItems.remove(path)
+        binding.recyclerView.layoutManager = GridLayoutManager(this, 3)
+        mediaAdapter = MediaAdapter(emptyList()) { mediaFile, isSelected ->
+            mediaFile.isSelected = isSelected
         }
-        binding.recyclerView.apply {
-            layoutManager = GridLayoutManager(this@MediaSelectorActivity, 3)
-            adapter = mediaAdapter
-        }
+        binding.recyclerView.adapter = mediaAdapter
     }
 
     private fun setupButtons() {
         binding.btnCancel.setOnClickListener { finish() }
         binding.btnConfirm.setOnClickListener {
-            val result = ArrayList<String>(selectedItems)
-            setResult(Activity.RESULT_OK, Intent().putStringArrayListExtra("selected_files", result))
+            val selectedFiles = mediaAdapter.getSelectedItems().map { it.path }
+            Intent().apply {
+                putStringArrayListExtra(EXTRA_SELECTED_FILES, ArrayList(selectedFiles))
+            }.let {
+                setResult(RESULT_OK, it)
+            }
             finish()
         }
     }
@@ -107,59 +110,11 @@ class MediaSelectorActivity : AppCompatActivity() {
 
     private fun loadMediaFiles() {
         lifecycleScope.launch {
-            val mediaList = withContext(Dispatchers.IO) {
-                queryMediaFiles(currentMediaType)
+            val files = withContext(Dispatchers.IO) {
+                MediaLoader.loadMediaFiles(this@MediaSelectorActivity, currentMediaType)
             }
-            mediaAdapter.updateData(mediaList)
+            mediaAdapter.updateData(files)
         }
-    }
-
-    private fun queryMediaFiles(mediaType: MediaType): List<String> {
-        val projection = arrayOf(
-            when (mediaType) {
-                MediaType.IMAGE -> MediaStore.Images.Media._ID
-                MediaType.VIDEO -> MediaStore.Video.Media._ID
-                MediaType.ALL -> MediaStore.Files.FileColumns._ID
-            }
-        )
-
-        val (collection, selection) = when (mediaType) {
-            MediaType.IMAGE -> Pair(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                null // 图片库不需要额外筛选
-            )
-            MediaType.VIDEO -> Pair(
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                null // 视频库不需要额外筛选
-            )
-            MediaType.ALL -> Pair(
-                MediaStore.Files.getContentUri("external"),
-                "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (" +
-                    "${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}," +
-                    "${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
-            )
-        }
-
-        return contentResolver.query(
-            collection,
-            projection,
-            selection,
-            null,
-            "${MediaStore.MediaColumns.DATE_ADDED} DESC"
-        )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(
-                when (mediaType) {
-                    MediaType.IMAGE -> MediaStore.Images.Media._ID
-                    MediaType.VIDEO -> MediaStore.Video.Media._ID
-                    MediaType.ALL -> MediaStore.Files.FileColumns._ID
-                }
-            )
-            mutableListOf<String>().apply {
-                while (cursor.moveToNext()) {
-                    add(ContentUris.withAppendedId(collection, cursor.getLong(idColumn)).toString())
-                }
-            }
-        } ?: emptyList()
     }
 
     private fun requestNeededPermissions(permissions: Array<String>) {
@@ -182,7 +137,7 @@ class MediaSelectorActivity : AppCompatActivity() {
 
     companion object {
         private const val PERMISSION_REQUEST_CODE = 1001
+        const val REQUEST_CODE_MEDIA_SELECT = 1001
+        const val EXTRA_SELECTED_FILES = "selected_files"
     }
 }
-
-enum class MediaType { ALL, VIDEO, IMAGE }
