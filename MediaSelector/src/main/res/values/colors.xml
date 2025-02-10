@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="colorPrimary">#2196F3</color> <!-- 主蓝色 -->
+  <color name="colorPrimaryDark">#1976D2</color> <!-- 深蓝色 -->
+  <color name="colorAccent">#FF4081</color> <!-- 强调色（粉红） -->
+  <color name="background">#F5F5F5</color> <!-- 浅灰背景 -->
+</resources> 

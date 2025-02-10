@@ -115,17 +115,29 @@ class MediaSelectorActivity : AppCompatActivity() {
     }
 
     private fun queryMediaFiles(mediaType: MediaType): List<String> {
-        val projection = arrayOf(MediaStore.Files.FileColumns._ID)
-        val collection = when (mediaType) {
-            MediaType.IMAGE -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-            MediaType.VIDEO -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            MediaType.ALL -> MediaStore.Files.getContentUri("external")
-        }
+        val projection = arrayOf(
+            when (mediaType) {
+                MediaType.IMAGE -> MediaStore.Images.Media._ID
+                MediaType.VIDEO -> MediaStore.Video.Media._ID
+                MediaType.ALL -> MediaStore.Files.FileColumns._ID
+            }
+        )
 
-        val selection = when (mediaType) {
-            MediaType.IMAGE -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}"
-            MediaType.VIDEO -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}"
-            MediaType.ALL -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
+        val (collection, selection) = when (mediaType) {
+            MediaType.IMAGE -> Pair(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                null // 图片库不需要额外筛选
+            )
+            MediaType.VIDEO -> Pair(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                null // 视频库不需要额外筛选
+            )
+            MediaType.ALL -> Pair(
+                MediaStore.Files.getContentUri("external"),
+                "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (" +
+                    "${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}," +
+                    "${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
+            )
         }
 
         return contentResolver.query(
@@ -133,9 +145,15 @@ class MediaSelectorActivity : AppCompatActivity() {
             projection,
             selection,
             null,
-            "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
+            "${MediaStore.MediaColumns.DATE_ADDED} DESC"
         )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+            val idColumn = cursor.getColumnIndexOrThrow(
+                when (mediaType) {
+                    MediaType.IMAGE -> MediaStore.Images.Media._ID
+                    MediaType.VIDEO -> MediaStore.Video.Media._ID
+                    MediaType.ALL -> MediaStore.Files.FileColumns._ID
+                }
+            )
             mutableListOf<String>().apply {
                 while (cursor.moveToNext()) {
                     add(ContentUris.withAppendedId(collection, cursor.getLong(idColumn)).toString())

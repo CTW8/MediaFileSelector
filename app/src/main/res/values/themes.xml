@@ -2,4 +2,33 @@
 <resources>
 
     <style name="Theme.Kotlin_learn" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.MediaSelector" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <!-- 主色 -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryVariant">@color/colorPrimaryVariant</item>
+        <item name="colorOnPrimary">@color/textOnPrimary</item>
+        
+        <!-- 次要色 -->
+        <item name="colorSecondary">@color/colorSecondary</item>
+        <item name="colorSecondaryVariant">@color/colorSecondaryVariant</item>
+        <item name="colorOnSecondary">@color/textOnPrimary</item>
+        
+        <!-- 背景 -->
+        <item name="android:windowBackground">@color/background</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/textPrimary</item>
+        
+        <!-- 文字 -->
+        <item name="android:textColorPrimary">@color/textPrimary</item>
+        <item name="android:textColorSecondary">@color/textSecondary</item>
+        
+        <!-- 状态栏 -->
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="android:navigationBarColor">?attr/colorPrimary</item>
+        
+        <!-- 按钮样式 -->
+        <item name="materialButtonStyle">@style/Widget.MediaSelector.Button</item>
+        <item name="borderlessButtonStyle">@style/Widget.MediaSelector.Button.Borderless</item>
+    </style>
 </resources>
