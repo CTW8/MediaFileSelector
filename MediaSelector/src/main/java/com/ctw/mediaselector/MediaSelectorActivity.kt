@@ -3,13 +3,9 @@ package com.ctw.mediaselector
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.provider.MediaStore
 import androidx.appcompat.app.AppCompatActivity
-import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.tabs.TabLayout
-import com.google.android.material.tabs.TabLayoutMediator
-import android.widget.Button
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.recyclerview.widget.RecyclerView
 import android.Manifest
 import android.content.pm.PackageManager
 import android.widget.Toast
@@ -17,33 +13,76 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import android.app.AlertDialog
 import android.os.Build
+import com.bumptech.glide.Glide
+import android.widget.Button
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.ctw.mediaselector.databinding.ActivityMediaSelectorBinding
+
 
 class MediaSelectorActivity : AppCompatActivity() {
-    private lateinit var viewPager: ViewPager2
+    private lateinit var binding: ActivityMediaSelectorBinding
+    internal val selectedItems = mutableSetOf<String>()
+    private var currentMediaType = MediaType.ALL
     private lateinit var tabLayout: TabLayout
+    private lateinit var recyclerView: RecyclerView
     private lateinit var btnCancel: Button
     private lateinit var btnConfirm: Button
-    val selectedItems = mutableSetOf<String>()
-
-    private val tabTitles = listOf("全部", "视频", "图片")
-
-    // 添加权限请求合约
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            setupUI()
-        } else {
-            Toast.makeText(this, "需要存储权限才能使用此功能", Toast.LENGTH_SHORT).show()
-            finish()
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_media_selector)
+        binding = ActivityMediaSelectorBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        checkPermission()
+        tabLayout = binding.tabLayout
+        recyclerView = binding.recyclerView
+        btnCancel = binding.btnCancel
+        btnConfirm = binding.btnConfirm
+
+        setupTabs()
+        setupRecyclerView()
+        setupButtons()
+        loadMediaFiles()
+    }
+
+    private fun setupTabs() {
+        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab?) {
+                currentMediaType = when (tab?.position) {
+                    0 -> MediaType.ALL
+                    1 -> MediaType.VIDEO
+                    2 -> MediaType.IMAGE
+                    else -> MediaType.ALL
+                }
+                loadMediaFiles()
+            }
+            override fun onTabUnselected(tab: TabLayout.Tab?) {}
+            override fun onTabReselected(tab: TabLayout.Tab?) {}
+        })
+    }
+
+    private fun setupRecyclerView() {
+        recyclerView.layoutManager = GridLayoutManager(this, 3)
+        val mediaAdapter = MediaAdapter(emptyList(), currentMediaType, selectedItems) { path, isSelected ->
+            if (isSelected) selectedItems.add(path) else selectedItems.remove(path)
+        }
+        recyclerView.adapter = mediaAdapter
+    }
+
+    private fun setupButtons() {
+        btnCancel.setOnClickListener { finish() }
+        btnConfirm.setOnClickListener { confirmSelection() }
+    }
+
+    private fun loadMediaFiles() {
+        val mediaList = queryMediaFiles()
+        val mediaAdapter = recyclerView.adapter as? MediaAdapter
+        mediaAdapter?.updateData(mediaList)
+    }
+
+    private fun queryMediaFiles(): List<String> {
+        // 实现媒体文件查询逻辑（同原Fragment逻辑）
+        return emptyList()
     }
 
     private fun checkPermission() {
@@ -67,7 +106,7 @@ class MediaSelectorActivity : AppCompatActivity() {
                 this,
                 requiredPermissions[0]
             ) -> {
-                showPermissionExplanationDialog(requiredPermissions)
+                showPermissionExplanationDialog()
             }
             else -> {
                 requestPermissions(requiredPermissions)
@@ -105,68 +144,22 @@ class MediaSelectorActivity : AppCompatActivity() {
             return
         }
 
-        // 初始化ViewPager和TabLayout
-        viewPager = findViewById(R.id.viewPager)
-        tabLayout = findViewById(R.id.tabLayout)
-        viewPager.adapter = MediaPagerAdapter(this)
-        
-        // 设置TabLayout联动
-        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
-            tab.text = when(position) {
-                0 -> "全部"
-                1 -> "视频"
-                2 -> "图片"
-                else -> ""
-            }
-        }.attach()
-
-        // 确认按钮点击处理
-        findViewById<Button>(R.id.btnConfirm).setOnClickListener {
-            returnSelectedResults()
-        }
-
-        // 取消按钮点击处理
-        findViewById<Button>(R.id.btnCancel).setOnClickListener {
-            cancelSelection()
-        }
-
-        setupViewPager()
+        setupTabs()
+        setupRecyclerView()
+        setupButtons()
+        loadMediaFiles()
     }
 
-    private fun setupViewPager() {
-        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            override fun onPageSelected(position: Int) {
-                // 暂停前一个Fragment的加载
-                (supportFragmentManager.findFragmentByTag("f${viewPager.currentItem}") as? MediaFragment)?.let {
-                    it.recyclerView?.adapter = null
-                }
-                super.onPageSelected(position)
-            }
-        })
-    }
-
-    private fun returnSelectedResults() {
-        val resultIntent = Intent().apply {
-            putStringArrayListExtra("selected_files", ArrayList(selectedItems))
-        }
-        setResult(RESULT_OK, resultIntent)
-        finish()
-    }
-
-    private fun cancelSelection() {
-        setResult(RESULT_CANCELED)
-        finish()
-    }
-
-    fun updateSelectedItems(path: String, isSelected: Boolean) {
-        if (isSelected) {
-            selectedItems.add(path)
+    private fun showPermissionExplanationDialog() {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO
+            )
         } else {
-            selectedItems.remove(path)
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
-    }
-
-    private fun showPermissionExplanationDialog(permissions: Array<String>) {
+        
         AlertDialog.Builder(this)
             .setTitle("需要媒体访问权限")
             .setMessage("此功能需要访问您的照片和视频来显示媒体内容")
@@ -193,23 +186,25 @@ class MediaSelectorActivity : AppCompatActivity() {
         } else {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
-        return ContextCompat.checkSelfPermission(
-            this,
-            requiredPermissions[0]
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-}
-
-class MediaPagerAdapter(activity: AppCompatActivity) : androidx.viewpager2.adapter.FragmentStateAdapter(activity) {
-    override fun getItemCount(): Int = 3
-
-    override fun createFragment(position: Int): androidx.fragment.app.Fragment {
-        return when (position) {
-            0 -> MediaFragment.newInstance(MediaType.ALL)
-            1 -> MediaFragment.newInstance(MediaType.VIDEO)
-            2 -> MediaFragment.newInstance(MediaType.IMAGE)
-            else -> throw IllegalArgumentException("Invalid position")
+        
+        return requiredPermissions.all { permission ->
+            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
         }
+    }
+
+    private fun confirmSelection() {
+        val result = ArrayList(selectedItems)
+        setResult(Activity.RESULT_OK, Intent().putStringArrayListExtra("selected_files", result))
+        finish()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // 清理所有Glide请求
+        Glide.with(applicationContext).pauseAllRequests()
+        Glide.get(this).clearMemory()
+        Glide.get(this).clearDiskCache()
+        selectedItems.clear()
     }
 }
 

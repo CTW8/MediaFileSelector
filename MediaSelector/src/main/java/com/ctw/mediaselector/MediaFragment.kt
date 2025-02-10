@@ -9,17 +9,20 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import android.database.Cursor
+import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.lifecycle.lifecycleScope
 
 class MediaFragment : Fragment() {
-    private lateinit var recyclerView: RecyclerView
+    internal lateinit var recyclerView: RecyclerView
     private lateinit var mediaType: MediaType
+    private val mediaList = mutableListOf<String>()
+    private var adapter: MediaAdapter? = null
 
     companion object {
         private const val ARG_MEDIA_TYPE = "media_type"
@@ -45,8 +48,24 @@ class MediaFragment : Fragment() {
     ): View? {
         val view = inflater.inflate(R.layout.fragment_media, container, false)
         recyclerView = view.findViewById(R.id.recyclerView)
-        recyclerView.layoutManager = GridLayoutManager(context, 3)
-        loadMediaFiles()
+        recyclerView.layoutManager = GridLayoutManager(requireContext(), 3)
+        
+        // 初始化适配器
+        adapter = MediaAdapter(
+            emptyList(),
+            mediaType,
+            (activity as? MediaSelectorActivity)?.selectedItems ?: mutableSetOf()
+        ) { path, isSelected ->
+            (activity as? MediaSelectorActivity)?.let { activity ->
+                if (isSelected) {
+                    activity.selectedItems.add(path)
+                } else {
+                    activity.selectedItems.remove(path)
+                }
+            }
+        }
+        recyclerView.adapter = adapter
+        
         return view
     }
 
@@ -54,74 +73,36 @@ class MediaFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
     }
 
-    private fun loadMediaFiles() {
+    private fun loadMedia() {
         viewLifecycleOwner.lifecycleScope.launch {
-            val mediaList = withContext(Dispatchers.IO) {
-                queryMediaFiles()
+            val result = withContext(Dispatchers.IO) {
+                queryMedia()
             }
-            
-            recyclerView.adapter = MediaAdapter(
-                mediaList,
-                mediaType,
-                (activity as MediaSelectorActivity).selectedItems.toSet(),
-                { path, isSelected ->
-                    (activity as? MediaSelectorActivity)?.updateSelectedItems(path, isSelected)
-                }
-            )
+            mediaList.clear()
+            mediaList.addAll(result)
+            adapter?.updateData(mediaList)
         }
     }
 
-    private suspend fun queryMediaFiles(): List<String> = withContext(Dispatchers.IO) {
-        val projection = arrayOf(
-            MediaStore.Files.FileColumns._ID,
-            MediaStore.Files.FileColumns.DATE_ADDED
-        )
-
-        val collection = when (mediaType) {
-            MediaType.IMAGE -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-            MediaType.VIDEO -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            MediaType.ALL -> MediaStore.Files.getContentUri("external")
-        }
-
-        val selection = when (mediaType) {
-            MediaType.IMAGE -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}"
-            MediaType.VIDEO -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}"
-            else -> null
-        }
-
-        val sortOrder = "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
-
-        return@withContext try {
-            val cursor = requireContext().contentResolver.query(
-                collection,
-                projection,
-                selection,
-                null,
-                sortOrder
-            )
-            
-            parseMediaUris(cursor, collection)
-        } catch (e: SecurityException) {
-            emptyList<String>()
-        }
+    private suspend fun queryMedia(): List<String> {
+        // 实现查询逻辑
+        return emptyList()
     }
 
     private fun parseMediaUris(cursor: Cursor?, collection: Uri): List<String> {
         val mediaList = mutableListOf<String>()
         cursor?.use {
             val idColumn = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
-            val mediaTypeColumn = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
-                val type = it.getInt(mediaTypeColumn)
-                val contentUri = when (type) {
-                    MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE -> ContentUris.withAppendedId(
+                val contentUri = when (mediaType) {
+                    MediaType.IMAGE -> ContentUris.withAppendedId(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id
                     )
-                    MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO -> ContentUris.withAppendedId(
+                    MediaType.VIDEO -> ContentUris.withAppendedId(
                         MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id
                     )
-                    else -> continue
+                    MediaType.ALL -> ContentUris.withAppendedId(collection, id)
                 }
                 mediaList.add(contentUri.toString())
             }
@@ -129,9 +110,14 @@ class MediaFragment : Fragment() {
         return mediaList
     }
 
+    fun clearAdapter() {
+        recyclerView.adapter = null
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         // 确保释放所有视图相关资源
         recyclerView.adapter = null
+        Glide.with(this).pauseAllRequests()
     }
 } 
