@@ -18,35 +18,37 @@ import android.widget.Button
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.ctw.mediaselector.databinding.ActivityMediaSelectorBinding
+import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import android.net.Uri
+import android.content.ContentUris
+import kotlinx.coroutines.withContext
 
 
 class MediaSelectorActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMediaSelectorBinding
+    private lateinit var mediaAdapter: MediaAdapter
     internal val selectedItems = mutableSetOf<String>()
     private var currentMediaType = MediaType.ALL
-    private lateinit var tabLayout: TabLayout
-    private lateinit var recyclerView: RecyclerView
-    private lateinit var btnCancel: Button
-    private lateinit var btnConfirm: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMediaSelectorBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        tabLayout = binding.tabLayout
-        recyclerView = binding.recyclerView
-        btnCancel = binding.btnCancel
-        btnConfirm = binding.btnConfirm
-
-        setupTabs()
+        setupTabLayout()
         setupRecyclerView()
         setupButtons()
-        loadMediaFiles()
+        checkPermissions()
     }
 
-    private fun setupTabs() {
-        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+    private fun setupTabLayout() {
+        binding.tabLayout.addTab(binding.tabLayout.newTab().setText("全部"))
+        binding.tabLayout.addTab(binding.tabLayout.newTab().setText("视频"))
+        binding.tabLayout.addTab(binding.tabLayout.newTab().setText("图片"))
+
+        binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 currentMediaType = when (tab?.position) {
                     0 -> MediaType.ALL
@@ -62,30 +64,25 @@ class MediaSelectorActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        recyclerView.layoutManager = GridLayoutManager(this, 3)
-        val mediaAdapter = MediaAdapter(emptyList(), currentMediaType, selectedItems) { path, isSelected ->
+        mediaAdapter = MediaAdapter(emptyList()) { path, isSelected ->
             if (isSelected) selectedItems.add(path) else selectedItems.remove(path)
         }
-        recyclerView.adapter = mediaAdapter
+        binding.recyclerView.apply {
+            layoutManager = GridLayoutManager(this@MediaSelectorActivity, 3)
+            adapter = mediaAdapter
+        }
     }
 
     private fun setupButtons() {
-        btnCancel.setOnClickListener { finish() }
-        btnConfirm.setOnClickListener { confirmSelection() }
+        binding.btnCancel.setOnClickListener { finish() }
+        binding.btnConfirm.setOnClickListener {
+            val result = ArrayList<String>(selectedItems)
+            setResult(Activity.RESULT_OK, Intent().putStringArrayListExtra("selected_files", result))
+            finish()
+        }
     }
 
-    private fun loadMediaFiles() {
-        val mediaList = queryMediaFiles()
-        val mediaAdapter = recyclerView.adapter as? MediaAdapter
-        mediaAdapter?.updateData(mediaList)
-    }
-
-    private fun queryMediaFiles(): List<String> {
-        // 实现媒体文件查询逻辑（同原Fragment逻辑）
-        return emptyList()
-    }
-
-    private fun checkPermission() {
+    private fun checkPermissions() {
         val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             arrayOf(
                 Manifest.permission.READ_MEDIA_IMAGES,
@@ -95,28 +92,60 @@ class MediaSelectorActivity : AppCompatActivity() {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
-        when {
-            ContextCompat.checkSelfPermission(
-                this,
-                requiredPermissions[0]
-            ) == PackageManager.PERMISSION_GRANTED -> {
-                setupUI()
-            }
-            ActivityCompat.shouldShowRequestPermissionRationale(
-                this,
-                requiredPermissions[0]
-            ) -> {
-                showPermissionExplanationDialog()
-            }
-            else -> {
-                requestPermissions(requiredPermissions)
-            }
+        if (hasPermissions(*requiredPermissions)) {
+            loadMediaFiles()
+        } else {
+            requestNeededPermissions(requiredPermissions)
         }
     }
 
-    private fun requestPermissions(permissions: Array<String>) {
-        val requestCode = 1001
-        ActivityCompat.requestPermissions(this, permissions, requestCode)
+    private fun hasPermissions(vararg permissions: String): Boolean {
+        return permissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun loadMediaFiles() {
+        lifecycleScope.launch {
+            val mediaList = withContext(Dispatchers.IO) {
+                queryMediaFiles(currentMediaType)
+            }
+            mediaAdapter.updateData(mediaList)
+        }
+    }
+
+    private fun queryMediaFiles(mediaType: MediaType): List<String> {
+        val projection = arrayOf(MediaStore.Files.FileColumns._ID)
+        val collection = when (mediaType) {
+            MediaType.IMAGE -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            MediaType.VIDEO -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            MediaType.ALL -> MediaStore.Files.getContentUri("external")
+        }
+
+        val selection = when (mediaType) {
+            MediaType.IMAGE -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}"
+            MediaType.VIDEO -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}"
+            MediaType.ALL -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
+        }
+
+        return contentResolver.query(
+            collection,
+            projection,
+            selection,
+            null,
+            "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+            mutableListOf<String>().apply {
+                while (cursor.moveToNext()) {
+                    add(ContentUris.withAppendedId(collection, cursor.getLong(idColumn)).toString())
+                }
+            }
+        } ?: emptyList()
+    }
+
+    private fun requestNeededPermissions(permissions: Array<String>) {
+        ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE)
     }
 
     override fun onRequestPermissionsResult(
@@ -125,86 +154,16 @@ class MediaSelectorActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1001) {
-            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                setupUI()
-            } else {
-                Toast.makeText(this, "需要媒体访问权限", Toast.LENGTH_SHORT).show()
-                finish()
-            }
-        }
-    }
-
-    private fun setupUI() {
-        setContentView(R.layout.activity_media_selector)
-        
-        if (!hasStoragePermission()) {
-            Toast.makeText(this, "需要存储权限", Toast.LENGTH_SHORT).show()
+        if (requestCode == PERMISSION_REQUEST_CODE && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+            loadMediaFiles()
+        } else {
+            Toast.makeText(this, "需要权限才能使用此功能", Toast.LENGTH_SHORT).show()
             finish()
-            return
-        }
-
-        setupTabs()
-        setupRecyclerView()
-        setupButtons()
-        loadMediaFiles()
-    }
-
-    private fun showPermissionExplanationDialog() {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO
-            )
-        } else {
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-        
-        AlertDialog.Builder(this)
-            .setTitle("需要媒体访问权限")
-            .setMessage("此功能需要访问您的照片和视频来显示媒体内容")
-            .setPositiveButton("授予权限") { _, _ ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    requestPermissions(arrayOf(
-                        Manifest.permission.READ_MEDIA_IMAGES,
-                        Manifest.permission.READ_MEDIA_VIDEO
-                    ), 1001)
-                } else {
-                    requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 1001)
-                }
-            }
-            .setNegativeButton("取消") { _, _ -> finish() }
-            .show()
-    }
-
-    private fun hasStoragePermission(): Boolean {
-        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO
-            )
-        } else {
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-        
-        return requiredPermissions.all { permission ->
-            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
         }
     }
 
-    private fun confirmSelection() {
-        val result = ArrayList(selectedItems)
-        setResult(Activity.RESULT_OK, Intent().putStringArrayListExtra("selected_files", result))
-        finish()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        // 清理所有Glide请求
-        Glide.with(applicationContext).pauseAllRequests()
-        Glide.get(this).clearMemory()
-        Glide.get(this).clearDiskCache()
-        selectedItems.clear()
+    companion object {
+        private const val PERMISSION_REQUEST_CODE = 1001
     }
 }
 
