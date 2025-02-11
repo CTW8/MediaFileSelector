@@ -65,7 +65,7 @@ class MediaSelectorActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        binding.recyclerView.layoutManager = GridLayoutManager(this, 3)
+        binding.recyclerView.layoutManager = GridLayoutManager(this, 4)
         mediaAdapter = MediaAdapter(emptyList()) { mediaFile, isSelected ->
             mediaFile.isSelected = isSelected
         }
