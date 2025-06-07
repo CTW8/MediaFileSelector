@@ -25,6 +25,7 @@ import android.net.Uri
 import android.content.ContentUris
 import kotlinx.coroutines.withContext
 import com.ctw.mediaselector.MediaLoader
+import androidx.core.view.isVisible
 
 
 class MediaSelectorActivity : AppCompatActivity() {
@@ -38,10 +39,17 @@ class MediaSelectorActivity : AppCompatActivity() {
         binding = ActivityMediaSelectorBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setupToolbar()
         setupTabLayout()
         setupRecyclerView()
         setupButtons()
         checkPermissions()
+    }
+
+    private fun setupToolbar() {
+        binding.toolbar.setNavigationOnClickListener {
+            finish()
+        }
     }
 
     private fun setupTabLayout() {
@@ -65,9 +73,10 @@ class MediaSelectorActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        binding.recyclerView.layoutManager = GridLayoutManager(this, 4)
+        binding.recyclerView.layoutManager = GridLayoutManager(this, 3)
         mediaAdapter = MediaAdapter(emptyList()) { mediaFile, isSelected ->
             mediaFile.isSelected = isSelected
+            updateSelectedCount()
         }
         binding.recyclerView.adapter = mediaAdapter
     }
@@ -83,6 +92,24 @@ class MediaSelectorActivity : AppCompatActivity() {
             }
             finish()
         }
+    }
+
+    private fun updateSelectedCount() {
+        val count = mediaAdapter.getSelectedCount()
+        binding.tvSelectedCount.text = "已选择 $count 个文件"
+        binding.btnConfirm.isEnabled = count > 0
+    }
+
+    private fun showLoadingState(show: Boolean) {
+        binding.llLoadingState.isVisible = show
+        binding.recyclerView.isVisible = !show
+        binding.llEmptyState.isVisible = false
+    }
+
+    private fun showEmptyState(show: Boolean) {
+        binding.llEmptyState.isVisible = show
+        binding.recyclerView.isVisible = !show
+        binding.llLoadingState.isVisible = false
     }
 
     private fun checkPermissions() {
@@ -109,11 +136,24 @@ class MediaSelectorActivity : AppCompatActivity() {
     }
 
     private fun loadMediaFiles() {
+        showLoadingState(true)
         lifecycleScope.launch {
-            val files = withContext(Dispatchers.IO) {
-                MediaLoader.loadMediaFiles(this@MediaSelectorActivity, currentMediaType)
+            try {
+                val files = withContext(Dispatchers.IO) {
+                    MediaLoader.loadMediaFiles(this@MediaSelectorActivity, currentMediaType)
+                }
+                
+                if (files.isEmpty()) {
+                    showEmptyState(true)
+                } else {
+                    showLoadingState(false)
+                    mediaAdapter.updateData(files)
+                    updateSelectedCount()
+                }
+            } catch (e: Exception) {
+                showEmptyState(true)
+                Toast.makeText(this@MediaSelectorActivity, "加载媒体文件失败", Toast.LENGTH_SHORT).show()
             }
-            mediaAdapter.updateData(files)
         }
     }
 

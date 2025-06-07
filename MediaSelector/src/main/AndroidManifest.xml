@@ -9,7 +9,7 @@
     <application>
         <activity
             android:name=".MediaSelectorActivity"
-            android:theme="@style/Theme.AppCompat"
+            android:theme="@style/Theme.MediaSelector"
             android:exported="false"
             android:requestLegacyExternalStorage="true" />
     </application>
