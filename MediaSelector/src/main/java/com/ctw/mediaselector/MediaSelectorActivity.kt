@@ -74,10 +74,16 @@ class MediaSelectorActivity : AppCompatActivity() {
 
     private fun setupRecyclerView() {
         binding.recyclerView.layoutManager = GridLayoutManager(this, 3)
-        mediaAdapter = MediaAdapter(emptyList()) { mediaFile, isSelected ->
-            mediaFile.isSelected = isSelected
-            updateSelectedCount()
-        }
+        mediaAdapter = MediaAdapter(
+            emptyList(),
+            onItemSelected = { mediaFile, isSelected ->
+                mediaFile.isSelected = isSelected
+                updateSelectedCount()
+            },
+            onItemClicked = { mediaFile ->
+                openPreview(mediaFile)
+            }
+        )
         binding.recyclerView.adapter = mediaAdapter
     }
 
@@ -98,6 +104,25 @@ class MediaSelectorActivity : AppCompatActivity() {
         val count = mediaAdapter.getSelectedCount()
         binding.tvSelectedCount.text = "已选择 $count 个文件"
         binding.btnConfirm.isEnabled = count > 0
+    }
+    
+    private fun openPreview(mediaFile: MediaFile) {
+        // 对于视频文件，如果当前预览有问题，可以改用SimpleVideoPreviewActivity
+        val activityClass = if (mediaFile.type == MediaType.VIDEO) {
+            // 如果VideoView有问题，使用这个：SimpleVideoPreviewActivity::class.java
+            // 如果VideoView正常，使用这个：MediaPreviewActivity::class.java
+            MediaPreviewActivity::class.java
+        } else {
+            MediaPreviewActivity::class.java
+        }
+        
+        Intent(this, activityClass).apply {
+            putExtra(MediaPreviewActivity.EXTRA_FILE_PATH, mediaFile.path)
+            putExtra(MediaPreviewActivity.EXTRA_FILE_NAME, mediaFile.name)
+            putExtra(MediaPreviewActivity.EXTRA_FILE_TYPE, mediaFile.type)
+        }.let {
+            startActivity(it)
+        }
     }
 
     private fun showLoadingState(show: Boolean) {

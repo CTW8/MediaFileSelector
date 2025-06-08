@@ -12,5 +12,17 @@
             android:theme="@style/Theme.MediaSelector"
             android:exported="false"
             android:requestLegacyExternalStorage="true" />
+            
+        <activity
+            android:name=".MediaPreviewActivity"
+            android:theme="@style/Theme.MediaSelector"
+            android:exported="false"
+            android:screenOrientation="unspecified" />
+            
+        <activity
+            android:name=".SimpleVideoPreviewActivity"
+            android:theme="@style/Theme.MediaSelector"
+            android:exported="false"
+            android:screenOrientation="unspecified" />
     </application>
 </manifest>

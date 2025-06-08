@@ -12,7 +12,8 @@ import com.ctw.mediaselector.databinding.ItemMediaBinding
 
 class MediaAdapter(
     private var mediaList: List<MediaFile>,
-    private val onItemSelected: (MediaFile, Boolean) -> Unit
+    private val onItemSelected: (MediaFile, Boolean) -> Unit,
+    private val onItemClicked: (MediaFile) -> Unit
 ) : RecyclerView.Adapter<MediaAdapter.ViewHolder>() {
 
     inner class ViewHolder(val binding: ItemMediaBinding) : RecyclerView.ViewHolder(binding.root) {
@@ -40,12 +41,20 @@ class MediaAdapter(
 
                 // Handle click events
                 vRipple.setOnClickListener {
+                    // 单击预览文件
+                    onItemClicked(mediaFile)
+                }
+                
+                vRipple.setOnLongClickListener {
+                    // 长按选择文件
                     val newState = !mediaFile.isSelected
                     onItemSelected(mediaFile, newState)
                     updateSelectionState(newState)
+                    true
                 }
                 
                 flSelectionIndicator.setOnClickListener {
+                    // 点击选择框直接切换选择状态
                     val newState = !mediaFile.isSelected
                     onItemSelected(mediaFile, newState)
                     updateSelectionState(newState)

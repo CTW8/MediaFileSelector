@@ -1,6 +1,8 @@
 package com.ctw.mediaselector
 
-enum class MediaType {
+import java.io.Serializable
+
+enum class MediaType : Serializable {
     ALL,
     VIDEO,
     IMAGE
