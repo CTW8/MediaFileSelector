@@ -2,6 +2,7 @@ package com.example.mediafileselector
 
 import android.content.Intent
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.ctw.mediaselector.MediaSelectorActivity
 import java.io.File
@@ -10,7 +11,17 @@ import kotlin.math.log10
 import kotlin.math.pow
 
 class MainActivity : AppCompatActivity() {
-    private val REQUEST_CODE_CHOOSE = 200
+    
+    // 使用新的Activity Result API
+    private val mediaSelectLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.getStringArrayListExtra("selected_files")?.let { paths ->
+                showSelectedFiles(paths)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -18,16 +29,7 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<android.widget.Button>(R.id.btn_select_file).setOnClickListener {
             val intent = Intent(this, MediaSelectorActivity::class.java)
-            startActivityForResult(intent, REQUEST_CODE_CHOOSE)
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CODE_CHOOSE && resultCode == RESULT_OK) {
-            data?.getStringArrayListExtra("selected_files")?.let { paths ->
-                showSelectedFiles(paths)
-            }
+            mediaSelectLauncher.launch(intent)
         }
     }
 
