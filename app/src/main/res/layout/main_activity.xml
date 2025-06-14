@@ -60,7 +60,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="点击下方按钮打开媒体文件选择器，支持图片和视频文件的多选功能"
+                        android:text="点击下方按钮体验不同的选择限制功能，支持图片和视频文件的预览和选择"
                         android:textSize="14sp"
                         android:textColor="@color/md_theme_light_onPrimaryContainer"
                         android:alpha="0.8"/>
@@ -69,17 +69,66 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Action button -->
+            <!-- Button section -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:text="选择模式"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/md_theme_light_onSurface"/>
+
+            <!-- Normal file selection -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_select_file"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_marginBottom="24dp"
-                android:text="打开媒体选择器"
+                android:layout_marginBottom="12dp"
+                android:text="普通选择（无限制）"
                 android:textSize="16sp"
                 app:backgroundTint="@color/md_theme_light_primary"
                 app:cornerRadius="16dp"
                 app:icon="@drawable/ic_folder_open"
+                app:iconGravity="textStart"/>
+
+            <!-- Image selection with limit -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_select_images"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginBottom="12dp"
+                android:text="只选择图片（最多3张）"
+                android:textSize="16sp"
+                app:backgroundTint="@color/md_theme_light_secondary"
+                app:cornerRadius="16dp"
+                app:icon="@android:drawable/ic_menu_gallery"
+                app:iconGravity="textStart"/>
+
+            <!-- Video selection with limit -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_select_video"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginBottom="12dp"
+                android:text="只选择视频（最多1个）"
+                android:textSize="16sp"
+                app:backgroundTint="@color/md_theme_light_tertiary"
+                app:cornerRadius="16dp"
+                app:icon="@android:drawable/ic_menu_slideshow"
+                app:iconGravity="textStart"/>
+
+            <!-- Multiple selection with min/max -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_select_multiple"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginBottom="24dp"
+                android:text="选择2-5个文件"
+                android:textSize="16sp"
+                app:backgroundTint="@color/md_theme_light_error"
+                app:cornerRadius="16dp"
+                app:icon="@android:drawable/ic_menu_manage"
                 app:iconGravity="textStart"/>
 
             <!-- Results card -->

@@ -16,6 +16,9 @@ class MediaAdapter(
     private val onItemClicked: (MediaFile) -> Unit
 ) : RecyclerView.Adapter<MediaAdapter.ViewHolder>() {
 
+    // 提供对mediaList的公共访问
+    val currentMediaList: List<MediaFile> get() = this.mediaList
+
     inner class ViewHolder(val binding: ItemMediaBinding) : RecyclerView.ViewHolder(binding.root) {
         
         fun bind(mediaFile: MediaFile) {
@@ -48,16 +51,21 @@ class MediaAdapter(
                 vRipple.setOnLongClickListener {
                     // 长按选择文件
                     val newState = !mediaFile.isSelected
+                    // 先调用回调检查是否可以选择
                     onItemSelected(mediaFile, newState)
-                    updateSelectionState(newState)
+                    // 注意：不在这里直接更新UI，让回调处理后再通过notifyDataSetChanged更新
                     true
                 }
                 
                 flSelectionIndicator.setOnClickListener {
                     // 点击选择框直接切换选择状态
+                    // 添加触觉反馈
+                    it.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                    
                     val newState = !mediaFile.isSelected
+                    // 先调用回调检查是否可以选择
                     onItemSelected(mediaFile, newState)
-                    updateSelectionState(newState)
+                    // 注意：不在这里直接更新UI，让回调处理后再通过notifyDataSetChanged更新
                 }
             }
         }

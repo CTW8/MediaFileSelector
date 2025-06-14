@@ -23,6 +23,39 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
+    <!-- Selection Button - Floating on top right -->
+    <FrameLayout
+        android:id="@+id/flSelectionContainer"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginTop="72dp"
+        android:layout_marginEnd="16dp"
+        android:layout_gravity="top|end">
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cvSelectionIndicator"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="center"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="4dp"
+            app:strokeColor="@android:color/white"
+            app:strokeWidth="2dp">
+
+            <ImageView
+                android:id="@+id/ivCheckMark"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_check"
+                android:tint="@android:color/white"
+                android:visibility="gone" />
+
+        </com.google.android.material.card.MaterialCardView>
+
+    </FrameLayout>
+
     <!-- Content Area -->
     <FrameLayout
         android:layout_width="match_parent"

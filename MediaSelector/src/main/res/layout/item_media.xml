@@ -26,6 +26,19 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"/>
 
+        <!-- Ripple effect for touch feedback - 放在中间层 -->
+        <View
+            android:id="@+id/vRipple"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"/>
+
         <!-- Video play indicator -->
         <ImageView
             android:id="@+id/ivVideoIndicator"
@@ -50,38 +63,29 @@
             app:layout_constraintStart_toStartOf="@id/ivThumbnail"
             app:layout_constraintTop_toTopOf="@id/ivThumbnail"/>
 
-        <!-- Selection indicator -->
+        <!-- Selection indicator - 放在最上层，确保能接收点击事件 -->
         <FrameLayout
             android:id="@+id/flSelectionIndicator"
-            android:layout_width="@dimen/media_selection_indicator_size"
-            android:layout_height="@dimen/media_selection_indicator_size"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_margin="@dimen/spacing_sm"
             android:background="@drawable/bg_selection_indicator"
+            android:clickable="true"
+            android:focusable="true"
+            android:elevation="4dp"
+            android:foreground="?android:attr/selectableItemBackgroundBorderless"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent">
 
             <ImageView
                 android:id="@+id/ivCheckMark"
-                android:layout_width="16dp"
-                android:layout_height="16dp"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_check"
                 android:visibility="gone"/>
 
         </FrameLayout>
-
-        <!-- Ripple effect for touch feedback -->
-        <View
-            android:id="@+id/vRipple"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:background="?android:attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"/>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

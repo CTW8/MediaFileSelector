@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.ctw.mediaselector.MediaSelectorActivity
+import com.ctw.mediaselector.MediaType
 import java.io.File
 import java.text.DecimalFormat
 import kotlin.math.log10
@@ -27,8 +28,36 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.main_activity)
 
+        // 普通文件选择
         findViewById<android.widget.Button>(R.id.btn_select_file).setOnClickListener {
             val intent = Intent(this, MediaSelectorActivity::class.java)
+            mediaSelectLauncher.launch(intent)
+        }
+        
+        // 只选择图片，最多3张
+        findViewById<android.widget.Button>(R.id.btn_select_images).setOnClickListener {
+            val intent = Intent(this, MediaSelectorActivity::class.java).apply {
+                putExtra(MediaSelectorActivity.EXTRA_ALLOWED_TYPES, MediaType.IMAGE)
+                putExtra(MediaSelectorActivity.EXTRA_MAX_SELECT_COUNT, 3)
+            }
+            mediaSelectLauncher.launch(intent)
+        }
+        
+        // 只选择视频，最多1个
+        findViewById<android.widget.Button>(R.id.btn_select_video).setOnClickListener {
+            val intent = Intent(this, MediaSelectorActivity::class.java).apply {
+                putExtra(MediaSelectorActivity.EXTRA_ALLOWED_TYPES, MediaType.VIDEO)
+                putExtra(MediaSelectorActivity.EXTRA_MAX_SELECT_COUNT, 1)
+            }
+            mediaSelectLauncher.launch(intent)
+        }
+        
+        // 选择任意文件，至少2个，最多5个
+        findViewById<android.widget.Button>(R.id.btn_select_multiple).setOnClickListener {
+            val intent = Intent(this, MediaSelectorActivity::class.java).apply {
+                putExtra(MediaSelectorActivity.EXTRA_MIN_SELECT_COUNT, 2)
+                putExtra(MediaSelectorActivity.EXTRA_MAX_SELECT_COUNT, 5)
+            }
             mediaSelectLauncher.launch(intent)
         }
     }

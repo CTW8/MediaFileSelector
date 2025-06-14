@@ -26,6 +26,7 @@ import android.content.ContentUris
 import kotlinx.coroutines.withContext
 import com.ctw.mediaselector.MediaLoader
 import androidx.core.view.isVisible
+import androidx.activity.result.contract.ActivityResultContracts
 
 
 class MediaSelectorActivity : AppCompatActivity() {
@@ -33,37 +34,100 @@ class MediaSelectorActivity : AppCompatActivity() {
     private lateinit var mediaAdapter: MediaAdapter
     internal val selectedItems = mutableSetOf<String>()
     private var currentMediaType = MediaType.ALL
+    
+    // 选择限制参数
+    private var maxSelectCount = 0 // 0表示无限制
+    private var allowedTypes = MediaType.ALL
+    private var minSelectCount = 0
+    
+    // 预览页面启动器
+    private val previewLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.let { data ->
+                val filePath = data.getStringExtra(MediaPreviewActivity.EXTRA_FILE_PATH)
+                val isSelected = data.getBooleanExtra(MediaPreviewActivity.EXTRA_IS_SELECTED, false)
+                
+                filePath?.let { path ->
+                    // 找到对应的媒体文件并更新选择状态
+                    updateFileSelectionFromPreview(path, isSelected)
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMediaSelectorBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // 获取配置参数
+        getConfigFromIntent()
+        
         setupToolbar()
         setupTabLayout()
         setupRecyclerView()
         setupButtons()
         checkPermissions()
     }
+    
+    private fun getConfigFromIntent() {
+        maxSelectCount = intent.getIntExtra(EXTRA_MAX_SELECT_COUNT, 0)
+        minSelectCount = intent.getIntExtra(EXTRA_MIN_SELECT_COUNT, 0)
+        allowedTypes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            intent.getSerializableExtra(EXTRA_ALLOWED_TYPES, MediaType::class.java) ?: MediaType.ALL
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getSerializableExtra(EXTRA_ALLOWED_TYPES) as? MediaType ?: MediaType.ALL
+        }
+        
+        // 如果指定了类型限制，设置默认选中的Tab
+        currentMediaType = allowedTypes
+    }
 
     private fun setupToolbar() {
         binding.toolbar.setNavigationOnClickListener {
             finish()
         }
+        
+        // 更新标题显示选择限制信息
+        val titleSuffix = when {
+            maxSelectCount > 0 -> " (最多${maxSelectCount}个)"
+            minSelectCount > 0 -> " (至少${minSelectCount}个)"
+            else -> ""
+        }
+        binding.toolbar.title = "选择文件$titleSuffix"
     }
 
     private fun setupTabLayout() {
-        binding.tabLayout.addTab(binding.tabLayout.newTab().setText("全部"))
-        binding.tabLayout.addTab(binding.tabLayout.newTab().setText("视频"))
-        binding.tabLayout.addTab(binding.tabLayout.newTab().setText("图片"))
+        // 根据允许的类型设置Tab
+        when (allowedTypes) {
+            MediaType.ALL -> {
+                binding.tabLayout.addTab(binding.tabLayout.newTab().setText("全部"))
+                binding.tabLayout.addTab(binding.tabLayout.newTab().setText("视频"))
+                binding.tabLayout.addTab(binding.tabLayout.newTab().setText("图片"))
+            }
+            MediaType.VIDEO -> {
+                binding.tabLayout.addTab(binding.tabLayout.newTab().setText("视频"))
+                binding.tabLayout.visibility = android.view.View.GONE // 只有一个选项时隐藏Tab
+            }
+            MediaType.IMAGE -> {
+                binding.tabLayout.addTab(binding.tabLayout.newTab().setText("图片"))
+                binding.tabLayout.visibility = android.view.View.GONE // 只有一个选项时隐藏Tab
+            }
+        }
 
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
-                currentMediaType = when (tab?.position) {
-                    0 -> MediaType.ALL
-                    1 -> MediaType.VIDEO
-                    2 -> MediaType.IMAGE
-                    else -> MediaType.ALL
+                currentMediaType = when (allowedTypes) {
+                    MediaType.ALL -> when (tab?.position) {
+                        0 -> MediaType.ALL
+                        1 -> MediaType.VIDEO
+                        2 -> MediaType.IMAGE
+                        else -> MediaType.ALL
+                    }
+                    else -> allowedTypes
                 }
                 loadMediaFiles()
             }
@@ -77,8 +141,34 @@ class MediaSelectorActivity : AppCompatActivity() {
         mediaAdapter = MediaAdapter(
             emptyList(),
             onItemSelected = { mediaFile, isSelected ->
-                mediaFile.isSelected = isSelected
-                updateSelectedCount()
+                var shouldUpdate = true
+                
+                // 如果是要选择文件（而不是取消选择），才检查数量限制
+                if (isSelected && !canSelectMore()) {
+                    Toast.makeText(this, "最多只能选择${maxSelectCount}个文件", Toast.LENGTH_SHORT).show()
+                    shouldUpdate = false
+                }
+                
+                // 如果是要选择文件（而不是取消选择），才检查类型限制
+                if (isSelected && !isTypeAllowed(mediaFile.type)) {
+                    val typeName = when (allowedTypes) {
+                        MediaType.IMAGE -> "图片"
+                        MediaType.VIDEO -> "视频"
+                        else -> "该类型"
+                    }
+                    Toast.makeText(this, "只能选择${typeName}文件", Toast.LENGTH_SHORT).show()
+                    shouldUpdate = false
+                }
+                
+                if (shouldUpdate) {
+                    mediaFile.isSelected = isSelected
+                    updateSelectedCount()
+                    // 只刷新特定项而不是整个列表，提升响应速度
+                    val position = mediaAdapter.currentMediaList.indexOf(mediaFile)
+                    if (position != -1) {
+                        mediaAdapter.notifyItemChanged(position)
+                    }
+                }
             },
             onItemClicked = { mediaFile ->
                 openPreview(mediaFile)
@@ -86,10 +176,26 @@ class MediaSelectorActivity : AppCompatActivity() {
         )
         binding.recyclerView.adapter = mediaAdapter
     }
+    
+    private fun canSelectMore(): Boolean {
+        return maxSelectCount <= 0 || mediaAdapter.getSelectedCount() < maxSelectCount
+    }
+    
+    private fun isTypeAllowed(type: MediaType): Boolean {
+        return allowedTypes == MediaType.ALL || allowedTypes == type
+    }
 
     private fun setupButtons() {
         binding.btnCancel.setOnClickListener { finish() }
         binding.btnConfirm.setOnClickListener {
+            val selectedCount = mediaAdapter.getSelectedCount()
+            
+            // 检查最小选择数量
+            if (minSelectCount > 0 && selectedCount < minSelectCount) {
+                Toast.makeText(this, "至少需要选择${minSelectCount}个文件", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            
             val selectedFiles = mediaAdapter.getSelectedItems().map { it.path }
             Intent().apply {
                 putStringArrayListExtra(EXTRA_SELECTED_FILES, ArrayList(selectedFiles))
@@ -102,26 +208,41 @@ class MediaSelectorActivity : AppCompatActivity() {
 
     private fun updateSelectedCount() {
         val count = mediaAdapter.getSelectedCount()
-        binding.tvSelectedCount.text = "已选择 $count 个文件"
-        binding.btnConfirm.isEnabled = count > 0
+        val countText = if (maxSelectCount > 0) {
+            "已选择 $count/$maxSelectCount 个文件"
+        } else {
+            "已选择 $count 个文件"
+        }
+        binding.tvSelectedCount.text = countText
+        
+        // 更新确认按钮状态
+        val minMet = minSelectCount <= 0 || count >= minSelectCount
+        binding.btnConfirm.isEnabled = count > 0 && minMet
     }
     
     private fun openPreview(mediaFile: MediaFile) {
-        // 对于视频文件，如果当前预览有问题，可以改用SimpleVideoPreviewActivity
-        val activityClass = if (mediaFile.type == MediaType.VIDEO) {
-            // 如果VideoView有问题，使用这个：SimpleVideoPreviewActivity::class.java
-            // 如果VideoView正常，使用这个：MediaPreviewActivity::class.java
-            MediaPreviewActivity::class.java
-        } else {
-            MediaPreviewActivity::class.java
-        }
-        
-        Intent(this, activityClass).apply {
+        Intent(this, MediaPreviewActivity::class.java).apply {
             putExtra(MediaPreviewActivity.EXTRA_FILE_PATH, mediaFile.path)
             putExtra(MediaPreviewActivity.EXTRA_FILE_NAME, mediaFile.name)
             putExtra(MediaPreviewActivity.EXTRA_FILE_TYPE, mediaFile.type)
+            putExtra(MediaPreviewActivity.EXTRA_IS_SELECTED, mediaFile.isSelected)
+            putExtra(MediaPreviewActivity.EXTRA_MAX_SELECT_COUNT, maxSelectCount)
+            putExtra(MediaPreviewActivity.EXTRA_CURRENT_SELECT_COUNT, mediaAdapter.getSelectedCount())
+            putExtra(MediaPreviewActivity.EXTRA_ALLOWED_TYPES, allowedTypes)
         }.let {
-            startActivity(it)
+            previewLauncher.launch(it)
+        }
+    }
+    
+    private fun updateFileSelectionFromPreview(filePath: String, isSelected: Boolean) {
+        // 在当前列表中找到对应文件并更新选择状态
+        val currentList = mediaAdapter.currentMediaList.toMutableList()
+        val fileIndex = currentList.indexOfFirst { it.path == filePath }
+        
+        if (fileIndex != -1) {
+            currentList[fileIndex].isSelected = isSelected
+            mediaAdapter.updateData(currentList)
+            updateSelectedCount()
         }
     }
 
@@ -204,5 +325,8 @@ class MediaSelectorActivity : AppCompatActivity() {
         private const val PERMISSION_REQUEST_CODE = 1001
         const val REQUEST_CODE_MEDIA_SELECT = 1001
         const val EXTRA_SELECTED_FILES = "selected_files"
+        const val EXTRA_MAX_SELECT_COUNT = "max_select_count"
+        const val EXTRA_MIN_SELECT_COUNT = "min_select_count"
+        const val EXTRA_ALLOWED_TYPES = "allowed_types"
     }
 }

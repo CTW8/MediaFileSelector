@@ -1,5 +1,7 @@
 package com.ctw.mediaselector
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -25,6 +27,12 @@ class MediaPreviewActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var updateSeekBarRunnable: Runnable? = null
     
+    // 选择相关的变量
+    private var isSelected = false
+    private var maxSelectCount = 0
+    private var currentSelectCount = 0
+    private var allowedTypes = MediaType.ALL
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMediaPreviewBinding.inflate(layoutInflater)
@@ -40,6 +48,17 @@ class MediaPreviewActivity : AppCompatActivity() {
             intent.getSerializableExtra(EXTRA_FILE_TYPE) as? MediaType
         }
         
+        // 获取选择相关参数
+        isSelected = intent.getBooleanExtra(EXTRA_IS_SELECTED, false)
+        maxSelectCount = intent.getIntExtra(EXTRA_MAX_SELECT_COUNT, 0)
+        currentSelectCount = intent.getIntExtra(EXTRA_CURRENT_SELECT_COUNT, 0)
+        allowedTypes = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            intent.getSerializableExtra(EXTRA_ALLOWED_TYPES, MediaType::class.java) ?: MediaType.ALL
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getSerializableExtra(EXTRA_ALLOWED_TYPES) as? MediaType ?: MediaType.ALL
+        }
+        
         if (filePath == null || fileName == null || fileType == null) {
             Toast.makeText(this, "参数错误", Toast.LENGTH_SHORT).show()
             finish()
@@ -51,18 +70,85 @@ class MediaPreviewActivity : AppCompatActivity() {
             name = fileName,
             path = filePath,
             type = fileType,
-            dateAdded = 0
+            dateAdded = 0,
+            isSelected = isSelected
         )
         
         setupToolbar()
+        setupSelectionButton()
         setupPreview()
     }
     
     private fun setupToolbar() {
         binding.toolbar.apply {
             title = mediaFile.name
-            setNavigationOnClickListener { finish() }
+            setNavigationOnClickListener { 
+                finishWithResult()
+            }
         }
+    }
+    
+    private fun setupSelectionButton() {
+        updateSelectionUI()
+        
+        binding.flSelectionContainer.setOnClickListener {
+            if (canToggleSelection()) {
+                isSelected = !isSelected
+                mediaFile.isSelected = isSelected
+                updateSelectionUI()
+            }
+        }
+    }
+    
+    private fun canToggleSelection(): Boolean {
+        // 如果当前已选中，可以取消选择
+        if (isSelected) return true
+        
+        // 检查类型限制
+        if (allowedTypes != MediaType.ALL && mediaFile.type != allowedTypes) {
+            val typeName = when (allowedTypes) {
+                MediaType.IMAGE -> "图片"
+                MediaType.VIDEO -> "视频"
+                else -> "文件"
+            }
+            Toast.makeText(this, "只能选择${typeName}文件", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        
+        // 检查数量限制
+        if (maxSelectCount > 0 && currentSelectCount >= maxSelectCount) {
+            Toast.makeText(this, "最多只能选择${maxSelectCount}个文件", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        
+        return true
+    }
+    
+    private fun updateSelectionUI() {
+        binding.cvSelectionIndicator.apply {
+            if (isSelected) {
+                setCardBackgroundColor(getColor(R.color.md_theme_light_primary))
+                strokeColor = getColor(R.color.md_theme_light_primary)
+                binding.ivCheckMark.isVisible = true
+            } else {
+                setCardBackgroundColor(getColor(android.R.color.transparent))
+                strokeColor = getColor(android.R.color.white)
+                binding.ivCheckMark.isVisible = false
+            }
+        }
+    }
+    
+    private fun finishWithResult() {
+        val resultIntent = Intent().apply {
+            putExtra(EXTRA_FILE_PATH, mediaFile.path)
+            putExtra(EXTRA_IS_SELECTED, isSelected)
+        }
+        setResult(Activity.RESULT_OK, resultIntent)
+        finish()
+    }
+    
+    override fun onBackPressed() {
+        finishWithResult()
     }
     
     private fun setupPreview() {
@@ -325,5 +411,9 @@ class MediaPreviewActivity : AppCompatActivity() {
         const val EXTRA_FILE_PATH = "file_path"
         const val EXTRA_FILE_NAME = "file_name"
         const val EXTRA_FILE_TYPE = "file_type"
+        const val EXTRA_IS_SELECTED = "is_selected"
+        const val EXTRA_MAX_SELECT_COUNT = "max_select_count"
+        const val EXTRA_CURRENT_SELECT_COUNT = "current_select_count"
+        const val EXTRA_ALLOWED_TYPES = "allowed_types"
     }
 } 
